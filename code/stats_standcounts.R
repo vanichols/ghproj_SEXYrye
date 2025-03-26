@@ -15,15 +15,25 @@ theme_set(theme_igray())
 # data --------------------------------------------------------------------
 
 d <- 
-  sexy1_eukey %>% 
-  select(-eu_id, -plothalf_id) %>% 
-  distinct() %>% 
-  left_join(sexy1_standcount)
+  sexy1_standcounts %>% 
+  left_join(sexy1_eukey) %>% 
+  left_join(sexy1_plotkey) %>% 
+  left_join(sexy1_trtkey) 
 
-
-# stats -------------------------------------------------------------------
+d %>% 
+  write_csv("data/standcounts-for-emmas-records.csv")
+# stats? -------------------------------------------------------------------
 
 #--first look at it
+
+d %>% 
+  ggplot(aes(block, plants_m2)) +
+  geom_point(aes(color = as.factor(date)), size = 3) +
+  facet_grid(.~cropcat, scales = "free")
+  
+
+ggsave("figs/trial1_standcounts.png")
+
 #--there are some mistakes, p has too many in block 2, xaprows has too many in block 1
 
 ggplotly(
