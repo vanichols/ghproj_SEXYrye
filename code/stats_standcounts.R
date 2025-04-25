@@ -31,8 +31,13 @@ d %>%
   geom_point(aes(color = as.factor(date)), size = 3) +
   facet_grid(.~cropcat, scales = "free")
   
-
 ggsave("figs/trial1_standcounts.png")
+
+d %>% 
+  mutate(year = year(date)) %>% 
+  group_by(year, croptrt_id) %>% 
+  summarise(plants_m2 = mean(plants_m2)) %>% 
+  filter(croptrt_id %in% c("a", "p"))
 
 #--there are some mistakes, p has too many in block 2, xaprows has too many in block 1
 
