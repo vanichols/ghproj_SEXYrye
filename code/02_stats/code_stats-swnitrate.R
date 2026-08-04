@@ -19,7 +19,7 @@ d2 <-
   left_join(sexy1_trtkey |> 
               separate(trt_desc, into = c("crop", "planting_season", "row_width", "cover_crop", "herbicide"),
                        sep = ",")) |> 
-  select(-planting_season, -row_width, -crop) 
+  select(-planting_season, -row_width) 
 
 #--four blocks
 d2 |> pull(block) |> unique()
@@ -86,4 +86,12 @@ d2 |>
 
 #--Q1: the difference between a and p without cover crop use - is it significant?
 #--Q2: Within an herbicide treatment, is there an effect of cover crop?
+
+#//from simon:
+# First figure out the sensoring - how many data points is it? Does it matter?
+#--could possibly use a bayesian approach if it matters
+#--include time (do a regression), see if there are sig slopes
+#--can just use 'trt' as factor in model, then do contrasts to get:
+#--cover crop x crop x herbicide, for example
+
 

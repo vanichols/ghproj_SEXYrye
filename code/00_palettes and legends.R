@@ -35,6 +35,5 @@ p_gre5 <- "#004400"
 # labels ------------------------------------------------------------------
 
 myyieldlab <- (expression(atop("Dry grain yield", paste("(Mg "~ha^-1*")"))))
-
-
-#myweedcountlab <- (expression(atop("Spring weed count", paste("(plants "~m^-2*")"))))
+mynitratelab <- (expression(atop("Nitrate-N concentation", paste("(mg N "~mL^-1*")"))))
+myfallbiolab <- (expression(atop("Fall biomass", paste("(kg "~ha^-2*")"))))
