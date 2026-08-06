@@ -36,4 +36,4 @@ p_gre5 <- "#004400"
 
 myyieldlab <- (expression(atop("Dry grain yield", paste("(Mg "~ha^-1*")"))))
 mynitratelab <- (expression(atop("Nitrate-N concentation", paste("(mg N "~mL^-1*")"))))
-myfallbiolab <- (expression(atop("Fall biomass", paste("(kg "~ha^-2*")"))))
+myfallbiolab <- (expression(atop("Fall biomass", paste("(kg "~ha^-1*")"))))
