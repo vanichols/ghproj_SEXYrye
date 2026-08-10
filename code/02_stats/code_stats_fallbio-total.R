@@ -17,6 +17,8 @@ library(multcomp)
 
 rm(list = ls())
 
+source("code/utils.R")
+
 # 1. fallbio data ---------------------------------------------------------
 
 f1 <- 
@@ -41,17 +43,18 @@ f3 |>
   geom_col() +
   facet_grid(.~trt_name)
 
-f <- f3
+f <- 
+  f3 %>%
+  fxn_SeparateTrt(.)
 
 
-# fallbio model -------------------------------------------------------------------
+# 1. by treatment -------------------------------------------------------------------
 
 m1 <- glmmTMB(value ~ trt_name + 
                 (1 | block), 
               REML = T, 
               data = f)
 
-summary(m1)
 sim_rest1 <- simulateResiduals(m1)
 plot(sim_rest1)
 
@@ -69,41 +72,43 @@ cld1 |>
   write_csv("data/stats/figs_emmeans/emmeans_fallbio.csv")
 
 
-# 2. weeds -------------------------------------------------------------------
+# 2. by herb, cctrt, crop -------------------------------------------------------------------
 
-w <- 
-  f2 |> 
-  filter(biomass_cat == "weeds")
-
-w |> 
-  ggplot(aes(block, value)) +
-  geom_col() +
-  facet_grid(.~trt_name)
-
-
-# weeds model -------------------------------------------------------------------
-
-m2 <- glmmTMB(value ~ trt_name + 
+m2 <- glmmTMB(value ~ herb * cctrt * crop + 
                 (1 | block), 
               REML = T, 
-              data = w)
+              data = f)
 
-summary(m2)
 sim_rest2 <- simulateResiduals(m2)
 plot(sim_rest2)
 
-#--letters
-em2 <- emmeans(m2, specs = ~trt_name)
+
+# cctrt*crop interaction
+# herb is not sig
+Anova(m2)
+
+em_all <- emmeans(m2, specs = ~ herb)
+
+#--the reduction in biomass from NOT using a cover crop is 3x larger in a compared to p
+em2 <- emmeans(m2, specs = ~ cctrt|crop)
+em2
+
+pairs(em2)
+
+#--the difference between a and p is only sig when using a cover crop
+em3 <- emmeans(m2, specs = ~ crop|cctrt)
+em3
+
+pairs(em3)
+
+em4 <- emmeans(m2, specs = ~ crop*cctrt)
 
 cld2 <- 
-  multcomp::cld(em2, Letters = letters) |> 
+  multcomp::cld(em4, Letters = letters) |> 
   as_tibble() |> 
   mutate(sig_letter = str_squish(.group),
-         data_type = "fallbio - weeds")
-
-cld2 |> 
-  dplyr::select(data_type, everything(), -.group) |> 
-  write_csv("data/stats/figs_emmeans/emmeans_fallbio-weeds.csv")
+         data_type = "fallbio") 
 
 
-
+#--a+cc is highest, all others (p, pcc, a) are the 'same'
+cld2

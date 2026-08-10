@@ -272,3 +272,7 @@ ggplot() +
        y = myfallbiolab,
        fill = "Biomass category") +
   th_esa
+
+#--could I show a flow diagram, looking at what was replaced by the cover crop?
+
+#--the cover crop competes with volunteers and weeds, but not with the perennial rye?
