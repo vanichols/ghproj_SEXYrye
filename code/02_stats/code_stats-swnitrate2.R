@@ -12,9 +12,18 @@
 
 #--note the minimum detection level is 0.05 mg/l
 
+rm(list = ls())
 
 library(tidyverse)
 library(prye)
+
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(ggResidpanel)
+
+
+source("code/utils.R")
 
 # 1. data -----------------------------------------------------------------
 
@@ -22,7 +31,10 @@ library(prye)
 d1 <- 
   sexy1_swnitrate |> 
   left_join(sexy1_plotkey) |> 
-  select(field_id, sea_name, data_type, block, plot, sampledate_ymd, trt_name, value, nitrate_sensored)
+  select(field_id, sea_name, data_type, block, plot, 
+         sampledate_ymd, days_after_harvest, dah,
+         trt_name, value, nitrate_sensored) %>%
+  fxn_SeparateTrt()
 
 # 2. how many undetectible values are there? ---------------------------------
 
@@ -53,5 +65,88 @@ d1 |>
 
 # 3. time -----------------------------------------------------------------
 
-#--use models simon suggests
 
+m1 <- lmer(value ~ dah*trt_name + (1|block),
+           data = d1)
+
+# summary(m1)
+# ggResidpanel::resid_panel(m1)
+# 
+# m2 <- lmer(value ~ trt_name + (1|block),
+#            data = d1)
+# 
+# summary(m2)
+# ggResidpanel::resid_panel(m2)
+# 
+# anova(m1, m2)
+# 
+# #--seems like model 1 is better, should include days after harvest
+# anova(m1)
+
+em_trends1 <- 
+  emtrends(m1, ~ trt_name, var = "dah") |> 
+  as_tibble()
+
+em_trends1 |> 
+  ggplot(aes(trt_name, dah.trend)) +
+  geom_point() +
+  geom_linerange(aes(ymin = lower.CL, ymax = upper.CL)) +
+  geom_hline(yintercept = 0)
+
+#--this is a good figure, write it
+em_trends1 |> 
+  write_csv("data/stats/figs_emmeans/emmeans_swnitrate-slopes.csv")
+
+
+emmeans(m1, ~ trt_name|dah)
+
+#--compare the slopes, too many, should make a contrast vector
+pairs(emtrends(m1, ~ trt_name, var = "dah")) |> 
+  as_tibble() |> 
+  arrange(p.value)
+#--seems like it is just acc that is different from everything else
+#--this is consistent with the biomass
+
+#-- this is the order:
+em_trends1$trt_name
+
+#--get a visual 
+# pred <- expand.grid(
+#   dah = seq(min(d1$dah, na.rm = TRUE),
+#                 max(d1$dah, na.rm = TRUE),
+#                 length.out = 100),
+#   trt_name = levels(d1$trt_name)
+# )
+# 
+# pred$value <- predict(m1, newdata = pred, re.form = NA)
+
+
+#--or
+pred <- emmeans(
+  m1,
+  ~ trt_name | dah,
+  at = list(dah = seq(min(d1$dah),
+                          #max(d1$dah),
+                          150,
+                          length.out = 100))
+) |>
+  as_tibble() |> 
+  fxn_SeparateTrt()
+
+pred |> 
+  write_csv("data/stats/figs_emmeans/emmeans_swnitrate-preds.csv")
+
+ggplot(d1, aes(dah, value, color = trt_name)) +
+  geom_point(alpha = 0.4) +
+  geom_ribbon(
+    data = pred,
+    aes(y = emmean, ymin = lower.CL, ymax = upper.CL, fill = trt_name),
+    alpha = 0.15,
+    color = NA
+  ) +
+  geom_line(
+    data = pred,
+    aes(y = emmean)
+  ) +
+  theme_classic() +
+  facet_grid(.~crop)
