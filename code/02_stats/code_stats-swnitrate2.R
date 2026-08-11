@@ -126,8 +126,7 @@ pred <- emmeans(
   m1,
   ~ trt_name | dah,
   at = list(dah = seq(min(d1$dah),
-                          #max(d1$dah),
-                          150,
+                          max(d1$dah),
                           length.out = 100))
 ) |>
   as_tibble() |> 
@@ -149,4 +148,4 @@ ggplot(d1, aes(dah, value, color = trt_name)) +
     aes(y = emmean)
   ) +
   theme_classic() +
-  facet_grid(.~crop)
+  facet_grid(herb~crop)
