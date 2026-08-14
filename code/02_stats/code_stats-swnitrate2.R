@@ -62,6 +62,16 @@ d1 |>
 
 #--I chose to believe it is more or less random, will proceed with assigning them as 0s for now (waiting on lowest detectible limit)
 
+#--is there a pattern in where we couldn't get water?
+#--how to distinguish between where we couldn't get water and where it is a 'failed plot'....go to prye
+d1 |> 
+  filter(is.na(value)) |> 
+  filter(dah < 150) |> #--still waiting on later samples
+  group_by(trt_name, dah) |> 
+  summarise(n = n()) |> 
+  ggplot(aes(trt_name, n)) +
+  geom_col() +
+  facet_wrap(~dah)
 
 # 3. time -----------------------------------------------------------------
 
@@ -84,17 +94,26 @@ m1 <- lmer(value ~ dah*trt_name + (1|block),
 # anova(m1)
 
 em_trends1 <- 
-  emtrends(m1, ~ trt_name, var = "dah") |> 
-  as_tibble()
+  emtrends(m1, ~ trt_name, var = "dah") 
 
 em_trends1 |> 
+  as_tibble() |> 
   ggplot(aes(trt_name, dah.trend)) +
   geom_point() +
   geom_linerange(aes(ymin = lower.CL, ymax = upper.CL)) +
   geom_hline(yintercept = 0)
 
-#--this is a good figure, write it
-em_trends1 |> 
+#--this is a good figure
+#--can I get letters for them
+
+cld1 <- 
+  multcomp::cld(em_trends1, Letters = letters,  decreasing = TRUE) |> 
+  as_tibble() |> 
+  mutate(sig_letter = str_squish(.group),
+         data_type = "swnitrate slopes") 
+
+
+cld1 |> 
   write_csv("data/stats/figs_emmeans/emmeans_swnitrate-slopes.csv")
 
 
