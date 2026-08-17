@@ -9,6 +9,7 @@ source("code/utils.R")
 library(tidyverse)
 library(prye)
 library(patchwork)
+library(scales)
 
 th_esa <- 
   theme_bw() +
@@ -17,46 +18,70 @@ th_esa <-
         axis.text.y = element_text(size = rel(1.5)),
         axis.text.x = element_text(size = rel(1.5)),
         strip.text = element_text(size = rel(1.75)),
-        panel.grid.major.x = element_blank() )
+        panel.grid.major.x = element_blank(),
+        strip.background = element_rect(fill = "tan"))
 
 
-# grain -------------------------------------------------------------------
 
-graw <- 
-  sexy1_grain |> 
-  fxn_SeparateTrt() |>
-  fxn_MakeNice() |> 
-  filter(data_type == "grain_Mgha") |> 
-  filter(crop != "mix")
+# harvest -------------------------------------------------------------------
 
 g1 <- 
-  read_csv("data/stats/figs_emmeans/emmeans_grainyields.csv") |> 
+  read_csv("data/stats/figs_emmeans/emmeans_grain.csv") |>
+  mutate(cctrt = NA) |> 
+  fxn_MakeNice() |> 
+  filter(crop != "mix", herb == "herb")
+
+#--letters are nonsense
+s1 <- 
+  read_csv("data/stats/figs_emmeans/emmeans_straw.csv") |> 
+  mutate(cctrt = NA) |> 
+  fxn_MakeNice() |> 
+  filter(crop != "mix", herb == "herb") 
+
+t1 <- 
+  read_csv("data/stats/figs_emmeans/emmeans_totbio.csv") |> 
   mutate(cctrt = NA) |> 
   fxn_MakeNice() |> 
   filter(crop != "mix", herb == "herb") |> 
-  mutate(data_type = "Dry grain yield (Mg ha-1)")
+  mutate(sig_letter = ifelse(crop == "a", "a", "b"))
 
-ggplot(data = g1, aes(x = cropNice, y = 1)) +
-  geom_point(aes(size = emmean, fill = cropNice), shape = 21, show.legend = F) +
-  geom_text(data = g1, 
-            aes(y = 1, label = round(emmean, 1)), size = 11, color = "white", fontface = "italic", show.legend = F) +
-  scale_y_continuous(limits = c(0.9, 1.1)) +
-  scale_size_area(max_size = 36) +
+
+#--the circle thing isn't working
+
+#--make circle thing
+h1 <-
+  g1 |>
+  dplyr::select(cropNice, data_type, emmean) |>
+  bind_rows(s1 |> dplyr::select(cropNice, data_type, emmean)) 
+
+h1 |> 
+  arrange(cropNice) |> 
+  mutate(ypos = lead(emmean)) |> 
+  mutate(combo = paste(cropNice, data_type),
+         ypos2 = case_when(
+           data_type == "grain" ~ ypos + emmean/2,
+           .default = emmean/2
+         )) |> 
+  ggplot(aes(cropNice, emmean)) +
+  geom_col(aes(fill = combo), color = "black", show.legend = F, width = 0.8) +
+  geom_linerange(data = t1, aes(x = cropNice, ymin = asymp.LCL, ymax = asymp.UCL)) +
+  geom_linerange(data = t1, aes(x = cropNice, ymin = asymp.LCL, ymax = asymp.UCL)) +
+  geom_text(data = t1, 
+            aes(cropNice, asymp.UCL + 1, label = paste0(round(emmean, 1), sig_letter)),
+            size = 8, fontface = "italic") +
+  geom_text(aes(cropNice, ypos2, label = round(emmean, 1)), 
+            size = 6, color = "white") +
+  scale_fill_manual(values = c("Annual grain" = p_annual,
+                               "Perennial grain" = p_perennial,
+                               "Annual straw" = "tan",
+                               "Perennial straw" = "tan")) +
   labs(x = NULL,
-       y = NULL) +
-  scale_fill_manual(values = c("Annual" = p_annual, 
-                               "Perennial" = p_perennial)) +
-  th_esa +
-  theme(axis.title.y = element_text(angle = 0, vjust = 0.5, size = rel(1.5)),
-        axis.text.y = element_blank(),
-        axis.text.x = element_text(size = rel(1.5)),
-        axis.ticks.y = element_blank(),
-        panel.grid = element_blank(),
-        strip.background = element_rect(fill = "tan")) +
-  facet_grid(.~data_type)
+       y = mytotbiolab,
+       fill = NULL) +
+  th_esa
 
 
-ggsave("figs/ESA_grain-yields.png", width = 3.5, height = 3.5)
+ggsave("figs/ESA_drybiomass.png", width = 6, height = 3.6)
 
 
 # nitrate -----------------------------------------------------------------
@@ -83,13 +108,10 @@ n.preds <- read_csv("data/stats/figs_emmeans/emmeans_swnitrate-preds.csv") |>
   filter(dah < 150)
 
 
-
+#--raw data
 n1 <- 
   sexy1_swnitrate |> 
   left_join(sexy1_plotkey) |> 
-  select(field_id, sea_name, data_type, block, plot, 
-         sampledate_ymd, days_after_harvest, dah,
-         trt_name, value, nitrate_sensored) %>%
   fxn_SeparateTrt() |> 
   fxn_MakeNice() |> 
   filter(herb == "herb") |> 
@@ -124,6 +146,10 @@ ggplot() +
     aes(x = dah, y = emmean, color = TrtNice),
     linewidth = 2
   ) +
+  labs(x = "Days after harvest",
+       y = mynitratelab,
+       color = NULL,
+       shape = NULL) +
   geom_text(data = n_star, aes(x = dah, y = value, label = text), 
             size = 18) +
   scale_color_manual(values = c("Annual" = p_annual,
@@ -131,14 +157,46 @@ ggplot() +
                                 "Annual + CC" = p_acc,
                                 "Perennial + CC" = p_pcc
   )) +
-  theme(strip.background = element_rect(fill = "tan")) +
-  th_esa +
+  guides(
+    color = guide_legend(override.aes = list(size = 4))
+  ) +
   theme_classic() +
-  
+  th_esa +
   facet_grid(.~cropNice)
 
-ggsave("figs/ESA_swnitrate-trends.png", width = 10, height = 8)
+ggsave("figs/ESA_swnitrate-trends.png", width = 10, height = 5)
 
+
+
+# biomass -----------------------------------------------------------------
+
+b0 <- read_csv("data/stats/figs_emmeans/emmeans_fallbio.csv")
+
+b1 <-
+  b0 |> 
+  fxn_SeparateTrt() |> 
+  fxn_MakeNice() |> 
+  filter(crop != "mix", herb == "herb") 
+  
+b1 |> 
+  ggplot(aes(cctrtNice, emmean)) +
+  geom_col(aes(fill = cropNice, alpha = cctrtNice), color = "black", show.legend = F) +
+  geom_linerange(aes(ymin = asymp.LCL, ymax = asymp.UCL)) +
+  geom_text(aes(y = 100, label = sig_letter), size = 8) +
+  geom_text(aes(y = asymp.UCL + 50, label = round(emmean, 0)),
+            fontface = "italic", size = 6) +
+  scale_fill_manual(values = c("Annual" = p_annual,
+                               "Perennial" = p_perennial)) +
+  scale_alpha_manual(values = c(1, 0.5)) +
+  labs(x = NULL,
+       y = myfallbiolab,
+       fill = NULL,
+       alpha = NULL) +
+  facet_grid(.~cropNice) +
+  scale_y_continuous(labels = label_comma(big.mark = ".", decimal.mark = ",")) +
+  th_esa
+
+ggsave("figs/ESA_fallbio.png", width = 8, height = 5)
 
 # weather -----------------------------------------------------------------
 

@@ -22,17 +22,18 @@ source("code/utils.R")
 # 1. yield data ---------------------------------------------------------
 
 f1 <- 
-  sexy1_grain |> 
+  sexy1_harvest |> 
   mutate(plot = as.character(plot)) |> 
-  filter(data_type == "grain_Mgha")
-
+  filter(data_type %in% c("straw_Mgha", "grain_Mgha")) |> 
+  summarise(.by = c(field_id, sea_name, trt_name, block, plot),
+            value = sum(value, na.rm = F)) 
 
 f <- 
   f1 |> 
   fxn_SeparateTrt()
 
 
-# 1. by crop -------------------------------------------------------------------
+# 1. by crop and herbicide bc cover crop is not a thing during the season -------------------------------------------------------------------
 
 m1 <- glmmTMB(value ~ crop*herb + 
                 (1 | block), 
@@ -42,7 +43,6 @@ m1 <- glmmTMB(value ~ crop*herb +
 sim_rest1 <- simulateResiduals(m1)
 plot(sim_rest1)
 
-#--no interaction with herbicide
 Anova(m1)
 
 #--letters
@@ -52,10 +52,10 @@ cld1 <-
   multcomp::cld(em1, Letters = letters,  decreasing = TRUE) |> 
   as_tibble() |> 
   mutate(sig_letter = str_squish(.group),
-         data_type = "yield") 
+         data_type = "totbio") 
 
 cld1 |>
   dplyr::select(data_type, everything(), -.group) |> 
-  write_csv("data/stats/figs_emmeans/emmeans_grainyields.csv")
+  write_csv("data/stats/figs_emmeans/emmeans_totbio.csv")
 
 

@@ -2,96 +2,168 @@
 #--created:   july 2026
 #--notes:
 
+#--from simon:
+# First figure out the sensoring - how many data points is it? Does it matter?
+# could possibly use a bayesian approach if it matters
+# include time (do a regression), see if there are sig slopes
+# can just use 'trt' as factor in model, then do contrasts to get:
+# cover crop x crop x herbicide, for example
+#--use lme...see attached pictures of notes
+
+#--note the minimum detection level is 0.05 mg/l
+
+rm(list = ls())
+
 library(tidyverse)
 library(prye)
 
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(ggResidpanel)
 
+
+source("code/utils.R")
 
 # 1. data -----------------------------------------------------------------
 
+#--don't need analyzer_id right now
 d1 <- 
   sexy1_swnitrate |> 
   left_join(sexy1_plotkey) |> 
-  select(field_id, sea_name, data_type, block, plot, sampledate_ymd, trt_name, value)
+  fxn_SeparateTrt()
 
-d2 <- 
-  d1 |> 
-  left_join(sexy1_trtkey |> 
-              separate(trt_desc, into = c("crop", "planting_season", "row_width", "cover_crop", "herbicide"),
-                       sep = ",")) |> 
-  select(-planting_season, -row_width) 
+# 2. how many undetectible values are there? ---------------------------------
 
-#--four blocks
-d2 |> pull(block) |> unique()
-#--nine sample points, but the last two have a lot of blanks where no water was pulled
-#--seven functional sample points
+#--9 total, or 2%
+d1 %>%
+  summarise(
+    nitrate_sensored = sum(nitrate_sensored),
+    nitrate_sensored_pct = sum(nitrate_sensored)/nrow(.))
 
+#--are they randomly distributed?
+#--over time, more or less
 d1 |> 
-  ggplot(aes(trt_name, value)) +
-  geom_boxplot(aes(color = trt_name)) +
-  facet_wrap(~sampledate_ymd)
+  group_by(plot, sampledate_ymd) |> 
+  summarise(nitrate_sensored = sum(nitrate_sensored)) |> 
+  ggplot(aes(plot, nitrate_sensored)) +
+  geom_col() +
+  facet_grid(.~sampledate_ymd)
 
-d2
-#--four crop treatments (p, a, apmix, aprows) or three if you pool the mixes together (p, a, mix)
-d2 |> pull(trt_nice) |> unique()
-
-#--two cover crop treatments: no cover, or cover crop
-d2 |> pull(cover_crop) |> unique()
-
-#--not a completely balanced design w/regard to cover crop - the mixes don't have a cover crop treatment
-
-#--all crop treatments have both with and without herbicide
-d2 |> pull(herbicide) |> unique()
-
-#--no real patterns over time, maybe a general trend upwards
+#--the xacc will be overly biased to a low value, potentially, xpcc as well, when using 0
 d1 |> 
-  group_by(trt_name, sampledate_ymd) |> 
-  summarise(value = mean(value, na.rm = T)) |> 
-  ggplot(aes(sampledate_ymd, value, group = trt_name)) +
-  geom_line(aes(color = trt_name), linewidth = 2)
+  group_by(trt_name) |> 
+  summarise(nitrate_sensored = sum(nitrate_sensored)) |> 
+  ggplot(aes(trt_name, nitrate_sensored)) +
+  geom_col() 
 
+#--I chose to believe it is more or less random, will proceed with assigning them as 0s for now (waiting on lowest detectible limit)
 
-#--there is a cover crop (not in the mixes)
+#--is there a pattern in where we couldn't get water?
+#--how to distinguish between where we couldn't get water and where it is a 'failed plot'....go to prye
 d1 |> 
-  left_join(sexy1_trtkey |> 
-              separate(trt_desc, into = c("crop", "planting_season", "row_width", "cover_crop", "herbicide"),
-                       sep = ",")) |> 
-  group_by(trt_nice, herbicide, crop, cover_crop, trt_name, sampledate_ymd) |> 
-  summarise(value = mean(value, na.rm = T)) |> 
-  ggplot(aes(sampledate_ymd, value, group = trt_name)) +
-  geom_line(aes(color = cover_crop, linetype = herbicide)) +
-  facet_grid(.~trt_nice)
+  filter(is.na(value)) |> 
+  filter(dah < 150) |> #--still waiting on later samples
+  group_by(trt_name, dah) |> 
+  summarise(n = n()) |> 
+  ggplot(aes(trt_name, n)) +
+  geom_col() +
+  facet_wrap(~dah)
 
-#--cover crop versus herbicide versus crop
-d2 |> 
-  group_by(trt_nice, herbicide, crop, cover_crop, trt_name, sampledate_ymd) |> 
-  summarise(value = mean(value, na.rm = T)) |> 
-  filter(trt_nice != "Annual/Perennial Mix") |> 
-  ggplot(aes(sampledate_ymd, value, group = trt_name)) +
-  geom_line(aes(color = cover_crop, linetype = herbicide), size = 2) +
-  facet_grid(.~trt_nice)
-
-#--time is not that interesting to me, could use it as a 'replicate'?
-#--the mixes are also a bit odd because of some issues, removing them to get at cover crop would be worth it (they don't have cover crop treatments)
-d2 |> 
-  group_by(trt_nice, herbicide, crop, cover_crop, trt_name, sampledate_ymd) |> 
-  summarise(value = mean(value, na.rm = T)) |> 
-  ggplot(aes(reorder(trt_name, -value), value)) +
-  geom_col(aes(fill = trt_name)) +
-  facet_grid(.~trt_nice, scales = "free_x", space = "free_x")
+# 3. time -----------------------------------------------------------------
 
 
-# my quetsions ------------------------------------------------------------
+m1 <- lmer(value ~ dah*trt_name + (1|block),
+           data = d1)
+
+summary(m1)
+ggResidpanel::resid_panel(m1)
+# 
+# m2 <- lmer(value ~ trt_name + (1|block),
+#            data = d1)
+# 
+# summary(m2)
+# ggResidpanel::resid_panel(m2)
+# 
+# anova(m1, m2)
+# 
+# #--seems like model 1 is better, should include days after harvest
+# anova(m1)
+
+em_trends1 <- 
+  emtrends(m1, ~ trt_name, var = "dah") 
+
+em_trends1 |> 
+  as_tibble() |> 
+  ggplot(aes(trt_name, dah.trend)) +
+  geom_point() +
+  geom_linerange(aes(ymin = lower.CL, ymax = upper.CL)) +
+  geom_hline(yintercept = 0)
+
+#--this is a good figure
+#--can I get letters for them
+
+cld1 <- 
+  multcomp::cld(em_trends1, Letters = letters,  decreasing = TRUE) |> 
+  as_tibble() |> 
+  mutate(sig_letter = str_squish(.group),
+         data_type = "swnitrate slopes") 
 
 
-#--Q1: the difference between a and p without cover crop use - is it significant?
-#--Q2: Within an herbicide treatment, is there an effect of cover crop?
-
-#//from simon:
-# First figure out the sensoring - how many data points is it? Does it matter?
-#--could possibly use a bayesian approach if it matters
-#--include time (do a regression), see if there are sig slopes
-#--can just use 'trt' as factor in model, then do contrasts to get:
-#--cover crop x crop x herbicide, for example
+cld1 |> 
+  write_csv("data/stats/figs_emmeans/emmeans_swnitrate-slopes.csv")
 
 
+emmeans(m1, ~ trt_name|dah)
+
+#--compare the slopes, too many, should make a contrast vector
+pairs(emtrends(m1, ~ trt_name, var = "dah")) |> 
+  as_tibble() |> 
+  arrange(p.value)
+#--seems like it is just acc that is different from everything else
+#--this is consistent with the biomass
+
+#-- this is the order:
+em_trends1
+
+#--help from simon needed
+
+#--get a visual 
+# pred <- expand.grid(
+#   dah = seq(min(d1$dah, na.rm = TRUE),
+#                 max(d1$dah, na.rm = TRUE),
+#                 length.out = 100),
+#   trt_name = levels(d1$trt_name)
+# )
+# 
+# pred$value <- predict(m1, newdata = pred, re.form = NA)
+
+
+#--or
+pred <- emmeans(
+  m1,
+  ~ trt_name | dah,
+  at = list(dah = seq(min(d1$dah),
+                          max(d1$dah),
+                          length.out = 100))
+) |>
+  as_tibble() |> 
+  fxn_SeparateTrt()
+
+pred |> 
+  write_csv("data/stats/figs_emmeans/emmeans_swnitrate-preds.csv")
+
+ggplot(d1, aes(dah, value, color = trt_name)) +
+  geom_point(alpha = 0.4) +
+  geom_ribbon(
+    data = pred,
+    aes(y = emmean, ymin = lower.CL, ymax = upper.CL, fill = trt_name),
+    alpha = 0.15,
+    color = NA
+  ) +
+  geom_line(
+    data = pred,
+    aes(y = emmean)
+  ) +
+  theme_classic() +
+  facet_grid(herb~crop)

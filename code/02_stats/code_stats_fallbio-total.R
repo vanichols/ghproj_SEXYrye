@@ -34,8 +34,8 @@ f2 <-
 #--combine biomass_cats (pha, weeds, etc.)
 f3 <- 
   f2 |>  
-  group_by(field_id, sea_name, trt_name, block, plot, sampledate_ymd2, data_type) |> 
-  summarise(value = sum(value))
+  summarise(.by = c(field_id, sea_name, trt_name, block, plot, sampledate_ymd2, data_type),
+            value = sum(value))
 
 #--double check it
 f3 |> 
@@ -48,6 +48,11 @@ f <-
   fxn_SeparateTrt(.)
 
 
+f |> 
+  filter(trt_name %in% c("p", "pcc")) |> 
+  group_by(trt_name) |> 
+  summarise(value = mean(value))
+
 # 1. by treatment -------------------------------------------------------------------
 
 m1 <- glmmTMB(value ~ trt_name + 
@@ -55,6 +60,7 @@ m1 <- glmmTMB(value ~ trt_name +
               REML = T, 
               data = f)
 
+summary(m1)
 sim_rest1 <- simulateResiduals(m1)
 plot(sim_rest1)
 
@@ -62,7 +68,7 @@ plot(sim_rest1)
 em1 <- emmeans(m1, specs = ~trt_name)
 
 cld1 <- 
-  multcomp::cld(em1, Letters = letters) |> 
+  multcomp::cld(em1, Letters = letters, reverse = TRUE) |> 
   as_tibble() |> 
   mutate(sig_letter = str_squish(.group),
          data_type = "fallbio") 
@@ -104,7 +110,7 @@ pairs(em3)
 em4 <- emmeans(m2, specs = ~ crop*cctrt)
 
 cld2 <- 
-  multcomp::cld(em4, Letters = letters) |> 
+  multcomp::cld(em4, Letters = letters, reversed = TRUE) |> 
   as_tibble() |> 
   mutate(sig_letter = str_squish(.group),
          data_type = "fallbio") 
@@ -112,3 +118,8 @@ cld2 <-
 
 #--a+cc is highest, all others (p, pcc, a) are the 'same'
 cld2
+
+cld2 |>
+  dplyr::select(data_type, everything(), -.group) |> 
+  write_csv("data/stats/figs_emmeans/emmeans_fallbio-cropxcctrt.csv")
+

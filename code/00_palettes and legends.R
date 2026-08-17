@@ -39,6 +39,7 @@ p_acc <- "#F1A997"
 
 # labels ------------------------------------------------------------------
 
+mytotbiolab <- (expression(atop("Dry biomass", paste("(Mg "~ha^-1*")"))))
 myyieldlab <- (expression(atop("Dry grain yield", paste("(Mg "~ha^-1*")"))))
 mynitratelab <- (expression(atop("Nitrate-N concentation", paste("(mg N "~mL^-1*")"))))
 myfallbiolab <- (expression(atop("Fall biomass", paste("(kg "~ha^-1*")"))))
