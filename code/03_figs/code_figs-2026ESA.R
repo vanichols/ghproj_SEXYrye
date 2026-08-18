@@ -52,9 +52,12 @@ t1 <-
 h1 <-
   g1 |>
   dplyr::select(cropNice, data_type, emmean) |>
-  bind_rows(s1 |> dplyr::select(cropNice, data_type, emmean)) 
+  bind_rows(s1 |> dplyr::select(cropNice, data_type, emmean)) |> 
+  mutate(letters = c("A", "B", "a", "b"),
+         ycomp_labs = paste0(round(emmean, 2), letters))
 
 h1 |> 
+  mutate(facet_name = "Harvested biomass") |> 
   arrange(cropNice) |> 
   mutate(ypos = lead(emmean)) |> 
   mutate(combo = paste(cropNice, data_type),
@@ -63,14 +66,14 @@ h1 |>
            .default = emmean/2
          )) |> 
   ggplot(aes(cropNice, emmean)) +
-  geom_col(aes(fill = combo), color = "black", show.legend = F, width = 0.8) +
+  geom_col(aes(fill = combo), color = "black", show.legend = F, width = 0.5) +
   geom_linerange(data = t1, aes(x = cropNice, ymin = asymp.LCL, ymax = asymp.UCL)) +
   geom_linerange(data = t1, aes(x = cropNice, ymin = asymp.LCL, ymax = asymp.UCL)) +
   geom_text(data = t1, 
             aes(cropNice, asymp.UCL + 1, label = paste0(round(emmean, 1), sig_letter)),
-            size = 8, fontface = "italic") +
-  geom_text(aes(cropNice, ypos2, label = round(emmean, 1)), 
-            size = 6, color = "white") +
+            size = 8, fontface = "bold") +
+  geom_text(aes(cropNice, ypos2, label = ycomp_labs), 
+            size = 6, color = "white", fontface = "italic") +
   scale_fill_manual(values = c("Annual grain" = p_annual,
                                "Perennial grain" = p_perennial,
                                "Annual straw" = "tan",
@@ -78,10 +81,10 @@ h1 |>
   labs(x = NULL,
        y = mytotbiolab,
        fill = NULL) +
-  th_esa
+  th_esa 
 
 
-ggsave("figs/ESA_drybiomass.png", width = 6, height = 3.6)
+ggsave("figs/ESA_drybiomass.png", width = 5, height = 3.6)
 
 
 # nitrate -----------------------------------------------------------------
@@ -152,10 +155,10 @@ ggplot() +
        shape = NULL) +
   geom_text(data = n_star, aes(x = dah, y = value, label = text), 
             size = 18) +
-  scale_color_manual(values = c("Annual" = p_annual,
-                                "Perennial" = p_perennial,
-                                "Annual + CC" = p_acc,
-                                "Perennial + CC" = p_pcc
+  scale_color_manual(values = c("Annual" = p_acc,
+                                "Perennial" = p_pcc,
+                                "Annual + CC" = p_annual,
+                                "Perennial + CC" = p_perennial
   )) +
   guides(
     color = guide_legend(override.aes = list(size = 4))
@@ -178,12 +181,13 @@ b1 <-
   fxn_MakeNice() |> 
   filter(crop != "mix", herb == "herb") 
   
-b1 |> 
+b1 |>
+  mutate(emmean_sig = paste0(round(emmean, 0), sig_letter)) |> 
   ggplot(aes(cctrtNice, emmean)) +
   geom_col(aes(fill = cropNice, alpha = cctrtNice), color = "black", show.legend = F) +
   geom_linerange(aes(ymin = asymp.LCL, ymax = asymp.UCL)) +
-  geom_text(aes(y = 100, label = sig_letter), size = 8) +
-  geom_text(aes(y = asymp.UCL + 50, label = round(emmean, 0)),
+  #geom_text(aes(y = 100, label = sig_letter), size = 8) +
+  geom_text(aes(y = asymp.UCL + 50, label = emmean_sig),
             fontface = "italic", size = 6) +
   scale_fill_manual(values = c("Annual" = p_annual,
                                "Perennial" = p_perennial)) +
@@ -197,6 +201,64 @@ b1 |>
   th_esa
 
 ggsave("figs/ESA_fallbio.png", width = 8, height = 5)
+
+
+# biomass components-----------------------------------------------------------------
+
+c1 <- 
+  sexy1_fallbio |> 
+  mutate(plot = as.character(plot)) |> 
+  ungroup() |> 
+  filter(sampledate_ymd2 == max(sampledate_ymd2)) |> 
+  mutate(biomass_cat2 = ifelse(biomass_cat %in% c("oil", "pha"), "cover crop", biomass_cat)) |> 
+  summarise(.by = c(trt_name, block, plot, sampledate_ymd2, biomass_cat2),
+            value = sum(value))
+
+#--take means across blocks
+c2 <- 
+  c1 |> 
+  summarise(.by = c(trt_name, biomass_cat2),
+            value = mean(value, na.rm = T)) |> 
+  group_by(trt_name) |> 
+  mutate(value_tot = sum(value))
+
+c3 <-
+  c2 |> 
+  fxn_SeparateTrt() |> 
+  fxn_MakeNice() |> 
+  filter(crop != "mix", herb == "herb") 
+
+c3 |>
+  mutate(biomass_cat3 = case_when(
+    biomass_cat2 == "rye re" ~ "Rye regrowth",
+    biomass_cat2 == "rye vo" ~ "Rye volunteers",
+    biomass_cat2 == "cover crop" ~ "Cover crop",
+    biomass_cat2 == "weeds" ~ "Weeds",
+    TRUE ~ "uhoh"
+  )) |> 
+  mutate(biomass_cat3 = factor(biomass_cat3, levels = c("Weeds",
+                                                        "Cover crop",
+                                                        "Rye volunteers", 
+                                                        "Rye regrowth")),
+         biomass_cat4 = fct_rev(biomass_cat3)) |> 
+  ggplot(aes(cctrtNice, value)) +
+  geom_col(aes(fill = biomass_cat3), color = "black", 
+           position = position_stack(reverse = TRUE)) +
+  scale_fill_manual(values = c("Rye volunteers" = p_pur2,
+                               "Cover crop" = p_gre3,
+                               "Rye regrowth" = p_perennial,
+                               "Weeds" = p_yel2)) +
+  # scale_alpha_manual(values = c(1, 0.5)) +
+  labs(x = NULL,
+       y = myfallbiolab,
+       fill = NULL,
+       alpha = NULL) +
+  facet_grid(.~cropNice) +
+  scale_y_continuous(labels = label_comma(big.mark = ".", decimal.mark = ",")) +
+  th_esa
+
+ggsave("figs/ESA_fallbio-components.png", width = 9, height = 5)
+
 
 # weather -----------------------------------------------------------------
 
